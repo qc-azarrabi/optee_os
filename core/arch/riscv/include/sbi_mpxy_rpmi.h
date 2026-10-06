@@ -6,6 +6,10 @@
 #ifndef __SBI_MPXY_RPMI_H
 #define __SBI_MPXY_RPMI_H
 
+#ifndef __ASSEMBLER__
+#include <tee_api_types.h>
+#endif
+
 #if defined(CFG_RISCV_SBI_MPXY_RPMI)
 
 #ifndef __ASSEMBLER__
@@ -158,7 +162,8 @@ sbi_mpxy_rpmi_init_send_without_response(struct sbi_mpxy_rpmi_message *message,
 	message->error = 0;
 }
 
-void sbi_mpxy_rpmi_probe_channels(void);
+/* Discover channels during primary initialization; return a discovery error. */
+TEE_Result sbi_mpxy_rpmi_probe_channels(void);
 /* Return the explicitly selected channel, or NULL if its group differs. */
 struct sbi_mpxy_rpmi_channel *
 sbi_mpxy_rpmi_get_channel(uint32_t channel_id, uint32_t servicegroup_id);
@@ -170,8 +175,9 @@ int sbi_mpxy_rpmi_send_data(struct sbi_mpxy_rpmi_channel *channel, void *data);
 #else /*!defined(CFG_RISCV_SBI_MPXY_RPMI)*/
 
 #ifndef __ASSEMBLER__
-static inline void sbi_mpxy_rpmi_probe_channels(void)
+static inline TEE_Result sbi_mpxy_rpmi_probe_channels(void)
 {
+	return TEE_ERROR_NOT_SUPPORTED;
 }
 #endif /*__ASSEMBLER__*/
 

@@ -322,8 +322,12 @@ void __weak boot_init_primary_runtime(void)
 	init_tee_runtime();
 	boot_mem_release_tmp_alloc();
 
-	if (!sbi_mpxy_init())
-		sbi_mpxy_rpmi_probe_channels();
+	if (!sbi_mpxy_init() && IS_ENABLED(CFG_RISCV_SBI_MPXY_RPMI)) {
+		TEE_Result res = sbi_mpxy_rpmi_probe_channels();
+
+		if (res)
+			EMSG("RPMI channel discovery failed: %#"PRIx32, res);
+	}
 }
 
 void __weak boot_init_primary_final(void)
