@@ -159,6 +159,9 @@ sbi_mpxy_rpmi_init_send_without_response(struct sbi_mpxy_rpmi_message *message,
 }
 
 void sbi_mpxy_rpmi_probe_channels(void);
+/* Return the explicitly selected channel, or NULL if its group differs. */
+struct sbi_mpxy_rpmi_channel *
+sbi_mpxy_rpmi_get_channel(uint32_t channel_id, uint32_t servicegroup_id);
 int sbi_mpxy_rpmi_read_attributes(struct sbi_mpxy_rpmi_channel *channel);
 int sbi_mpxy_rpmi_send_data(struct sbi_mpxy_rpmi_channel *channel, void *data);
 

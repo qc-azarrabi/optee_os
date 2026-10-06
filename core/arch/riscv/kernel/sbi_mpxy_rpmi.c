@@ -162,6 +162,26 @@ int sbi_mpxy_rpmi_read_attributes(struct sbi_mpxy_rpmi_channel *channel)
 					&channel->rpmi_attrs);
 }
 
+struct sbi_mpxy_rpmi_channel *
+sbi_mpxy_rpmi_get_channel(uint32_t channel_id, uint32_t servicegroup_id)
+{
+	uint32_t i = 0;
+
+	if (!sbi_mpxy_rpmi_ctx)
+		return NULL;
+
+	for (i = 0; i < sbi_mpxy_rpmi_ctx->channel_count; i++) {
+		struct sbi_mpxy_rpmi_channel *channel =
+			&sbi_mpxy_rpmi_ctx->channels[i];
+
+		if (channel->channel_id == channel_id &&
+		    channel->rpmi_attrs.servicegroup_id == servicegroup_id)
+			return channel;
+	}
+
+	return NULL;
+}
+
 /**
  * @brief Sends a raw RPMI message over an MPXY channel.
  *
@@ -214,6 +234,7 @@ int sbi_mpxy_rpmi_send_data(struct sbi_mpxy_rpmi_channel *channel, void *data)
 		ret = RPMI_ERR_NOTSUPP;
 		break;
 	case SBI_MPXY_RPMI_MSG_TYPE_SEND_WITH_RESPONSE:
+		message->data.response_len = 0;
 		if ((!message->data.request && message->data.request_len) ||
 		    (!message->data.response &&
 		     message->data.max_response_len)) {
@@ -225,11 +246,20 @@ int sbi_mpxy_rpmi_send_data(struct sbi_mpxy_rpmi_channel *channel, void *data)
 			ret = RPMI_ERR_IO;
 			break;
 		}
+		if (message->data.request_len > channel->attrs.msg_max_len) {
+			ret = RPMI_ERR_BAD_RANGE;
+			break;
+		}
 		ret = sbi_mpxy_send_message_with_response(channel->channel_id
 		      , message->data.service_id, message->data.request,
 		      message->data.request_len, message->data.response,
 		      message->data.max_response_len,
 		      &message->data.response_len);
+		if (!ret && message->data.response_len >
+			    channel->attrs.msg_max_len) {
+			message->data.response_len = 0;
+			ret = RPMI_ERR_IO;
+		}
 		break;
 	case SBI_MPXY_RPMI_MSG_TYPE_SEND_WITHOUT_RESPONSE:
 		if (!message->data.request && message->data.request_len) {
@@ -239,6 +269,10 @@ int sbi_mpxy_rpmi_send_data(struct sbi_mpxy_rpmi_channel *channel, void *data)
 		if (!(channel->attrs.capability &
 		      SBI_MPXY_CHAN_CAP_SEND_WITHOUT_RESP)) {
 			ret = RPMI_ERR_IO;
+			break;
+		}
+		if (message->data.request_len > channel->attrs.msg_max_len) {
+			ret = RPMI_ERR_BAD_RANGE;
 			break;
 		}
 		ret = sbi_mpxy_send_message_without_response(channel->channel_id
