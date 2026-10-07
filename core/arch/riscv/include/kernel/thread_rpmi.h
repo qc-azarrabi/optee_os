@@ -28,6 +28,25 @@ uint32_t optee_rpmi_caller(void);
 void optee_rpmi_set_caller(uint32_t caller);
 /* The initial backend serves one authenticated REE until secure OS restart. */
 bool optee_rpmi_claim_caller(uint32_t caller);
+#ifdef CFG_CORE_ASYNC_NOTIF
+int32_t optee_rpmi_signal_bus_setup(void);
+void optee_rpmi_signal_bus_teardown(void);
+int32_t optee_rpmi_enable_async_notif(uint32_t peer, uint32_t signal);
+void optee_rpmi_flush_async_notif(void);
+#else
+static inline int32_t optee_rpmi_signal_bus_setup(void)
+{
+	return RPMI_ERR_DENIED;
+}
+
+static inline void optee_rpmi_signal_bus_teardown(void)
+{
+}
+
+static inline void optee_rpmi_flush_async_notif(void)
+{
+}
+#endif
 void optee_rpmi_set_call_response(int32_t status, uint32_t result,
 				  uint64_t token);
 void optee_rpmi_complete_and_loop(void) __noreturn;

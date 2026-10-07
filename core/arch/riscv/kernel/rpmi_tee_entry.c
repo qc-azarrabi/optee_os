@@ -149,6 +149,7 @@ static void complete_current(struct rpmi_hart *hart)
 	int32_t status = RPMI_ERR_FAILED;
 	TEE_Result res = TEE_SUCCESS;
 
+	optee_rpmi_flush_async_notif();
 	res = rpmi_reqfwd_complete(hart->reqfwd, hart->response,
 				   hart->response_len, &pending, &status);
 	/* An uncertain completion cannot be retried without duplicating it. */

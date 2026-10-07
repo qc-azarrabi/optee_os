@@ -13,6 +13,9 @@ srcs-$(CFG_RISCV_SBI_MPXY_RPMI) += optee_rpmi.c
 srcs-$(CFG_CORE_RPMI) += rpmi_shm.c
 srcs-$(CFG_CORE_RPMI) += rpmi_tee_dt.c
 srcs-$(CFG_CORE_RPMI) += rpmi_tee_entry.c
+ifeq ($(CFG_CORE_RPMI),y)
+srcs-$(CFG_CORE_ASYNC_NOTIF) += notif_rpmi.c
+endif
 srcs-y += boot.c
 srcs-y += hart.c
 srcs-y += entry.S

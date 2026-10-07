@@ -1128,8 +1128,8 @@ CFG_PAN ?= n
 $(eval $(call cfg-depends-one,CFG_PAN,CFG_ARM64_core CFG_RV64_core CFG_RV32_core))
 
 ifeq ($(filter y, $(CFG_CORE_SEL1_SPMC) $(CFG_CORE_SEL2_SPMC) \
-		  $(CFG_CORE_EL3_SPMC)),y)
-# FF-A case, handled via the FF-A ABI
+		  $(CFG_CORE_EL3_SPMC) $(CFG_CORE_RPMI)),y)
+# FF-A and RPMI provide their own notification backends.
 CFG_CORE_ASYNC_NOTIF ?= y
 $(call force,_CFG_CORE_ASYNC_NOTIF_DEFAULT_IMPL,n)
 else
