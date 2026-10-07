@@ -6,8 +6,23 @@
 #include <io.h>
 #include <rpmi_tee.h>
 #include <stdlib.h>
+#include <string.h>
 #include <utee_defines.h>
 #include <util.h>
+
+struct rpmi_tee_call_req {
+	uint32_t sender_id;
+	uint32_t target_id;
+	uint8_t service[16];
+	uint32_t data_len;
+	uint8_t data[];
+} __packed;
+
+struct rpmi_tee_call_resp {
+	int32_t status;
+	uint32_t data_len;
+	uint8_t data[];
+} __packed;
 
 struct rpmi_tee_probe_features_req {
 	uint32_t feature_id;
@@ -69,6 +84,56 @@ struct rpmi_tee_memory_release_req {
 	uint32_t ep_count;
 	uint32_t ep_id;
 };
+
+TEE_Result rpmi_tee_call_get_args(const void *request, size_t request_len,
+				  uint32_t *sender_id, uint32_t *target_id,
+				  const uint8_t **service,
+				  const void **data, size_t *data_len)
+{
+	const struct rpmi_tee_call_req *req = request;
+	size_t len = 0;
+
+	if (!sender_id || !target_id || !service || !data || !data_len)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	if (request_len < sizeof(*req))
+		return TEE_ERROR_BAD_FORMAT;
+
+	len = get_unaligned_le32(&req->data_len);
+	if (len != request_len - sizeof(*req))
+		return TEE_ERROR_BAD_FORMAT;
+
+	*sender_id = get_unaligned_le32(&req->sender_id);
+	*target_id = get_unaligned_le32(&req->target_id);
+	*service = req->service;
+	*data = req->data;
+	*data_len = len;
+
+	return TEE_SUCCESS;
+}
+
+TEE_Result rpmi_tee_call_set_response(int32_t status,
+				      const void *data, size_t len,
+				      void *response, size_t *response_len)
+{
+	struct rpmi_tee_call_resp *resp = response;
+
+	if ((!data && len) || len > UINT32_MAX)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	if (*response_len < sizeof(*resp) ||
+	    len > *response_len - sizeof(*resp))
+		return TEE_ERROR_SHORT_BUFFER;
+
+	put_unaligned_le32(&resp->status, status);
+	put_unaligned_le32(&resp->data_len, len);
+	if (len)
+		memcpy(resp->data, data, len);
+
+	*response_len = sizeof(*resp) + len;
+
+	return TEE_SUCCESS;
+}
 
 /* Check that the channel belongs to the TEE service group. */
 static TEE_Result tee_check_channel(struct mbox_chan *channel)

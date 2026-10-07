@@ -20,6 +20,7 @@
 #define RPMI_TEE_MEMORY_PARCEL_ACCEPT	0x0f
 #define RPMI_TEE_MEMORY_PARCEL_RELEASE	0x10
 #define RPMI_TEE_MEMORY_SEGMENT_RECEIVE	0x13
+#define RPMI_TEE_CALL			0x18
 
 /* Feature IDs in TEE_PROBE_FEATURES. */
 #define RPMI_TEE_FEATURE_MEMORY_DONATE	0
@@ -67,6 +68,35 @@ struct rpmi_tee_memory_accept_args {
 	size_t page_count;
 	bool needs_release;
 };
+
+/*
+ * The TEE_CALL helpers below only parse and construct message buffers, so they
+ * take no channel. The caller retrieves the request and sends the response
+ * through a separate transport, such as a request-forwarding channel.
+ */
+
+/* Fixed TEE_CALL response header: STATUS and SERVICE_RSP_LEN. */
+#define RPMI_TEE_CALL_RESP_HEADER_SIZE (sizeof(int32_t) + sizeof(uint32_t))
+
+/*
+ * Get TEE_CALL arguments, excluding the standard RPMI message header.
+ * The caller must supply a non-NULL request buffer.
+ * Outputs are valid only on success. Service and data borrow the input buffer.
+ */
+TEE_Result rpmi_tee_call_get_args(const void *request, size_t request_len,
+				  uint32_t *sender_id, uint32_t *target_id,
+				  const uint8_t **service,
+				  const void **data, size_t *data_len);
+
+/*
+ * Set a TEE_CALL response without an RPMI message header.
+ * The caller must supply non-NULL response and response_len pointers.
+ * response_len supplies the buffer size and receives the length on success.
+ * The service data must not overlap the response buffer.
+ */
+TEE_Result rpmi_tee_call_set_response(int32_t status,
+				      const void *data, size_t len,
+				      void *response, size_t *response_len);
 
 /*
  * Query a framework feature on an explicitly selected TEE-group channel.
