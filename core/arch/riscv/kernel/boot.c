@@ -28,6 +28,9 @@
 #include <sbi.h>
 #include <sbi_mpxy.h>
 #include <sbi_mpxy_rpmi.h>
+#ifdef CFG_CORE_RPMI
+#include <kernel/thread_rpmi.h>
+#endif
 #include <stdalign.h>
 #include <stdio.h>
 #include <string.h>
@@ -328,6 +331,9 @@ void __weak boot_init_primary_runtime(void)
 		if (res)
 			EMSG("RPMI channel discovery failed: %#"PRIx32, res);
 	}
+#ifdef CFG_CORE_RPMI
+	optee_rpmi_init_primary();
+#endif
 }
 
 void __weak boot_init_primary_final(void)
@@ -356,7 +362,8 @@ static void init_secondary_helper(void)
 
 	thread_init_per_cpu();
 	boot_secondary_init_intc();
-	sbi_mpxy_init();
+	if (sbi_mpxy_init() && IS_ENABLED(CFG_CORE_RPMI))
+		panic("Secondary hart MPXY initialization failed");
 
 	IMSG("Secondary CPU%zu (hart%"PRIu32") initialized",
 	     pos, thread_get_hartid());

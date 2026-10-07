@@ -379,6 +379,9 @@ UNWIND(	.cantunwind)
 
 	jal	thread_clr_boot_thread
 
+#ifdef CFG_CORE_RPMI
+	j	optee_rpmi_loop
+#else
 	li	a0, TEEABI_OPTEED_RETURN_ENTRY_DONE
 	lla	a1, thread_vector_table
 	li	a2, 0
@@ -386,6 +389,7 @@ UNWIND(	.cantunwind)
 	li	a4, 0
 	li	a5, 0
 	j	thread_return_to_udomain
+#endif
 END_FUNC reset_primary
 
 LOCAL_FUNC reset_secondary , : , .identity_map
@@ -413,6 +417,9 @@ UNWIND(	.cantunwind)
 #endif
 	jal	boot_init_secondary
 	cpu_is_ready
+#ifdef CFG_CORE_RPMI
+	j	optee_rpmi_loop
+#endif
 #ifdef CFG_RISCV_WITH_M_MODE_SM
 	/* Return to untrusted domain */
 	li	a0, TEEABI_OPTEED_RETURN_ON_DONE
