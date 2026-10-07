@@ -6,6 +6,7 @@
 #ifndef __KERNEL_OPTEE_RPMI_PRIVATE_H
 #define __KERNEL_OPTEE_RPMI_PRIVATE_H
 
+#include <drivers/mailbox.h>
 #include <mm/mobj.h>
 #include <optee_rpmi.h>
 #include <rpmi.h>
@@ -66,6 +67,32 @@ union optee_rpmi_control_response {
 	struct optee_rpmi_caps_resp caps;
 };
 
+/* Per-hart request and response buffers. */
+struct rpmi_hart {
+	uint8_t *request;
+	uint8_t response[RPMI_TEE_CALL_RESP_HEADER_SIZE +
+			 sizeof(union optee_rpmi_control_response)];
+	size_t response_len;
+};
+
+struct optee_rpmi_core_state {
+	struct rpmi_hart harts[CFG_TEE_CORE_NB_CORE];
+	struct mbox_client client;
+	struct mbox_chan *reqfwd_channel;
+	struct mbox_chan *tee_channel;
+	bool probed;
+	bool initialized;
+};
+
+/* One domain-wide backend; each state group retains its own synchronization. */
+struct optee_rpmi_context {
+	struct optee_rpmi_core_state core;
+	struct rpmi_shm_context shm;
+};
+
+struct mbox_chan *optee_rpmi_channel(void);
+struct rpmi_shm_context *optee_rpmi_shm_context(void);
+
 /* Forwarded-request dispatch and completion. */
 /*
  * Decode an RPMI packet and construct its complete service response data.
@@ -77,5 +104,8 @@ union optee_rpmi_control_response {
 TEE_Result optee_rpmi_dispatch(uint32_t self_id,
 			       const void *data, size_t data_len,
 			       void *resp, size_t *resp_len);
+
+/* Enter on the temporary stack; retrieval waits in firmware when idle. */
+void optee_rpmi_loop(void) __noreturn;
 
 #endif /* __KERNEL_OPTEE_RPMI_PRIVATE_H */
