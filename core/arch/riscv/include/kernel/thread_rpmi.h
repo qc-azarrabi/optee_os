@@ -23,6 +23,8 @@ TEE_Result optee_rpmi_dispatch(uint32_t self_id,
 void optee_rpmi_init_primary(void);
 struct sbi_mpxy_rpmi_channel *optee_rpmi_channel(void);
 struct rpmi_shm_context *optee_rpmi_shm_context(void);
+uint32_t optee_rpmi_caller(void);
+void optee_rpmi_set_caller(uint32_t caller);
 
 /* Platform overrides may replace the provisional DT channel association. */
 TEE_Result optee_rpmi_get_channel_ids(uint32_t hart_id, uint32_t *reqfwd_id,

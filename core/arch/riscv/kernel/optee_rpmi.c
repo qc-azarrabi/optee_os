@@ -75,6 +75,29 @@ static TEE_Result dispatch_control(const void *data, size_t len,
 		put_unaligned_le32(&resp.caps.notification_count,
 				   NOTIF_VALUE_MAX + 1);
 		break;
+#ifdef CFG_CORE_RPMI
+	case OPTEE_RPMI_UNREGISTER_SHM: {
+		const struct optee_rpmi_unregister_req *req = data;
+		TEE_Result res = TEE_SUCCESS;
+
+		if (len != sizeof(*req)) {
+			status = RPMI_ERR_INVALID_PARAM;
+			break;
+		}
+		res = rpmi_shm_unregister(optee_rpmi_shm_context(),
+					  optee_rpmi_channel(),
+					  optee_rpmi_caller(),
+					  get_unaligned_le32(&req->parcel_id),
+					  get_unaligned_le32(&req->nonce));
+		if (res == TEE_ERROR_BUSY)
+			status = RPMI_ERR_BUSY;
+		else if (res == TEE_ERROR_BAD_PARAMETERS)
+			status = RPMI_ERR_INVALID_PARAM;
+		else if (res)
+			status = RPMI_ERR_FAILED;
+		break;
+	}
+#endif
 	default:
 		status = RPMI_ERR_NOTSUPP;
 		break;
@@ -121,6 +144,9 @@ TEE_Result optee_rpmi_dispatch(uint32_t self_id,
 	    get_unaligned_le32(&req->data_len) != request->len - sizeof(*req))
 		return TEE_SUCCESS;
 
+#ifdef CFG_CORE_RPMI
+	optee_rpmi_set_caller(get_unaligned_le32(&req->sender_id));
+#endif
 	res = dispatch_control(req->data, request->len - sizeof(*req),
 			       resp->data, &len);
 	if (res)

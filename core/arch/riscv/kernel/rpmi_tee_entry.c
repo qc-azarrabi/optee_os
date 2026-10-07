@@ -16,6 +16,7 @@ struct rpmi_hart {
 	struct sbi_mpxy_rpmi_channel *tee;
 	uint8_t *request;
 	uint8_t response[32];
+	uint32_t caller;
 };
 
 static struct rpmi_hart harts[CFG_TEE_CORE_NB_CORE];
@@ -91,6 +92,16 @@ struct rpmi_shm_context *optee_rpmi_shm_context(void)
 {
 	assert(initialized);
 	return &shm_context;
+}
+
+uint32_t optee_rpmi_caller(void)
+{
+	return current_hart()->caller;
+}
+
+void optee_rpmi_set_caller(uint32_t caller)
+{
+	current_hart()->caller = caller;
 }
 
 void optee_rpmi_loop(void)
