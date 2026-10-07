@@ -85,6 +85,12 @@ struct rpmi_tee_memory_release_req {
 	uint32_t ep_id;
 };
 
+struct rpmi_tee_signal_raise_req {
+	uint32_t target_id;
+	uint32_t signal_count;
+	uint32_t signal;
+};
+
 TEE_Result rpmi_tee_call_get_args(const void *request, size_t request_len,
 				  uint32_t *sender_id, uint32_t *target_id,
 				  const uint8_t **service,
@@ -423,6 +429,29 @@ TEE_Result rpmi_tee_memory_release(struct mbox_chan *channel,
 	res = tee_send_with_status(channel, RPMI_TEE_MEMORY_PARCEL_RELEASE,
 				   &req, sizeof(req), &resp, &resp_len,
 				   &status);
+	if (res)
+		return res;
+	if (resp_len != sizeof(resp))
+		return TEE_ERROR_BAD_FORMAT;
+	return rpmi_status_to_tee_result(status);
+}
+
+TEE_Result rpmi_tee_signal_raise(struct mbox_chan *channel,
+				 uint32_t target_id, uint32_t signal_id)
+{
+	struct rpmi_tee_signal_raise_req req = {};
+	uint32_t resp = 0;
+	size_t resp_len = sizeof(resp);
+	int32_t status = RPMI_ERR_FAILED;
+	TEE_Result res = TEE_SUCCESS;
+
+	if (!channel)
+		return TEE_ERROR_BAD_PARAMETERS;
+	req.target_id = TEE_U32_TO_LITTLE_ENDIAN(target_id);
+	req.signal_count = TEE_U32_TO_LITTLE_ENDIAN(1);
+	req.signal = TEE_U32_TO_LITTLE_ENDIAN(signal_id);
+	res = tee_send_with_status(channel, RPMI_TEE_SIGNAL_RAISE, &req,
+				   sizeof(req), &resp, &resp_len, &status);
 	if (res)
 		return res;
 	if (resp_len != sizeof(resp))
