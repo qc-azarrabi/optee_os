@@ -15,6 +15,7 @@
 #define RPMI_TEE_SERVICEGROUP_ID		0x0010
 #define RPMI_TEE_PROBE_FEATURES		0x02
 #define RPMI_TEE_PROBE_SYSTEM		0x03
+#define RPMI_TEE_SIGNAL_RAISE		0x0c
 #define RPMI_TEE_MEMORY_PARCEL_ACCEPT	0x0f
 #define RPMI_TEE_MEMORY_PARCEL_RELEASE	0x10
 #define RPMI_TEE_MEMORY_SEGMENT_RECEIVE	0x13
@@ -74,5 +75,10 @@ TEE_Result rpmi_tee_memory_accept(struct sbi_mpxy_rpmi_channel *channel,
 TEE_Result rpmi_tee_memory_release(struct sbi_mpxy_rpmi_channel *channel,
 				   uint32_t ep_id, uint32_t parcel_id,
 				   int32_t *status);
+
+/* Firmware checks that the target bus is live and the ID is in our range. */
+TEE_Result rpmi_tee_signal_raise(struct sbi_mpxy_rpmi_channel *channel,
+				 uint32_t target_id, uint32_t signal_id,
+				 int32_t *status);
 
 #endif /* __RPMI_TEE_H */

@@ -73,6 +73,12 @@ struct rpmi_tee_memory_release_req {
 	uint32_t ep_id;
 };
 
+struct rpmi_tee_signal_raise_req {
+	uint32_t target_id;
+	uint32_t signal_count;
+	uint32_t signal;
+};
+
 /* Separate local exchange errors from the firmware's RPMI service status. */
 static TEE_Result tee_send(struct sbi_mpxy_rpmi_channel *channel,
 			   uint32_t service_id, void *req, size_t req_len,
@@ -328,6 +334,28 @@ TEE_Result rpmi_tee_memory_release(struct sbi_mpxy_rpmi_channel *channel,
 	put_unaligned_le32(&req.ep_count, 1);
 	put_unaligned_le32(&req.ep_id, ep_id);
 	res = tee_send(channel, RPMI_TEE_MEMORY_PARCEL_RELEASE, &req, sizeof(req),
+		       &resp, &resp_len, status);
+	if (!res && resp_len != sizeof(resp))
+		return TEE_ERROR_BAD_FORMAT;
+	return res;
+}
+
+TEE_Result rpmi_tee_signal_raise(struct sbi_mpxy_rpmi_channel *channel,
+				 uint32_t target_id, uint32_t signal_id,
+				 int32_t *status)
+{
+	struct rpmi_tee_signal_raise_req req = {};
+	uint32_t resp = 0;
+	unsigned long resp_len = sizeof(resp);
+	TEE_Result res = TEE_SUCCESS;
+
+	if (!channel || !status)
+		return TEE_ERROR_BAD_PARAMETERS;
+	*status = RPMI_ERR_FAILED;
+	put_unaligned_le32(&req.target_id, target_id);
+	put_unaligned_le32(&req.signal_count, 1);
+	put_unaligned_le32(&req.signal, signal_id);
+	res = tee_send(channel, RPMI_TEE_SIGNAL_RAISE, &req, sizeof(req),
 		       &resp, &resp_len, status);
 	if (!res && resp_len != sizeof(resp))
 		return TEE_ERROR_BAD_FORMAT;
