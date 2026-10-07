@@ -49,6 +49,12 @@ struct rpmi_shm_context *optee_rpmi_shm_context(void)
 	return &context.shm;
 }
 
+TEE_Result mobj_rpmi_get_by_cookie(uint64_t global_id, struct mobj **mobj)
+{
+	return rpmi_shm_get(optee_rpmi_shm_context(), optee_rpmi_channel(),
+			    thread_get_tsd()->rpmi_caller_id, global_id, mobj);
+}
+
 /* 2. Forwarded-request processing. */
 
 static TEE_Result init_hart_buffer(struct rpmi_hart *hart)
