@@ -5,6 +5,7 @@
 
 #include <io.h>
 #include <kernel/notif.h>
+#include <kernel/panic.h>
 #include <kernel/thread.h>
 #include <optee_rpmi.h>
 #include <rpmi_tee.h>
@@ -47,6 +48,46 @@ static TEE_Result rpmi_parse_request(const void *data, size_t len,
 	return TEE_SUCCESS;
 }
 
+struct rpmi_tee_signal_bus_setup_req {
+	uint32_t target_id;
+	uint32_t bus_width;
+	uint32_t sender_signals;
+} __packed;
+
+struct rpmi_tee_signal_bus_teardown_req {
+	uint32_t target_id;
+} __packed;
+
+/* Complete bus control with its own status, not a TEE_CALL envelope. */
+static TEE_Result dispatch_signal_bus(uint32_t self_id,
+				      const struct rpmi_request *request,
+				      void *response, size_t *response_len)
+{
+	int32_t status = RPMI_ERR_DENIED;
+
+	if (request->service_id == RPMI_TEE_SIGNAL_BUS_SETUP) {
+		const struct rpmi_tee_signal_bus_setup_req *req = request->data;
+
+		/* Firmware checks widths, ranges and peer authorization. */
+		if (request->len == sizeof(*req) &&
+		    get_unaligned_le32(&req->target_id) == self_id)
+			status = optee_rpmi_signal_bus_setup();
+	} else {
+		const struct rpmi_tee_signal_bus_teardown_req *req =
+			request->data;
+
+		/* Forwarded teardown permits only a success response. */
+		if (request->len != sizeof(*req) ||
+		    get_unaligned_le32(&req->target_id) != self_id)
+			panic("Malformed forwarded signal-bus teardown");
+		optee_rpmi_signal_bus_teardown();
+		status = RPMI_SUCCESS;
+	}
+	put_unaligned_le32(response, status);
+	*response_len = sizeof(status);
+	return TEE_SUCCESS;
+}
+
 /* RFC 4122 byte order, matching Linux's OPTEE_RPMI_SERVICE_UUID. */
 static const uint8_t service_uuid[] = {
 	0x48, 0x61, 0x78, 0xe0, 0xe7, 0xf8, 0x11, 0xe3,
@@ -71,6 +112,23 @@ static TEE_Result handle_unregister_shm(uint32_t caller, const void *data,
 				   optee_rpmi_channel(), caller,
 				   global_id);
 }
+
+#ifdef CFG_CORE_ASYNC_NOTIF
+/* Enable the doorbell described by an unaligned control request. */
+static TEE_Result handle_enable_async_notif(uint32_t caller, const void *data,
+					    size_t len)
+{
+	struct optee_rpmi_enable_notif_req req = {};
+	uint32_t signal = 0;
+
+	if (len != sizeof(req))
+		return TEE_ERROR_BAD_PARAMETERS;
+	memcpy(&req, data, sizeof(req));
+	signal = TEE_U32_FROM_LITTLE_ENDIAN(req.signal_id);
+
+	return optee_rpmi_enable_async_notif(caller, signal);
+}
+#endif
 
 /* Dispatch controls on the temporary stack or enter a secure thread. */
 static TEE_Result dispatch_control(uint32_t caller, const void *data,
@@ -114,6 +172,13 @@ static TEE_Result dispatch_control(uint32_t caller, const void *data,
 		resp->caps.max_notification_key =
 			TEE_U32_TO_LITTLE_ENDIAN(NOTIF_VALUE_MAX);
 		break;
+#ifdef CFG_CORE_ASYNC_NOTIF
+	case OPTEE_RPMI_ENABLE_ASYNC_NOTIF:
+		if (*response_len < size)
+			return TEE_ERROR_SHORT_BUFFER;
+		status = handle_enable_async_notif(caller, data, len);
+		break;
+#endif
 	case OPTEE_RPMI_YIELDING_CALL_WITH_ARG:
 	case OPTEE_RPMI_YIELDING_CALL_RESUME:
 		return thread_rpmi_handle_control(caller, op, data, len,
@@ -158,6 +223,11 @@ TEE_Result optee_rpmi_dispatch(uint32_t self_id,
 		*response_len = sizeof(uint32_t);
 		return TEE_SUCCESS;
 	}
+	if (request.servicegroup_id == RPMI_TEE_SERVICEGROUP_ID &&
+	    (request.service_id == RPMI_TEE_SIGNAL_BUS_SETUP ||
+	     request.service_id == RPMI_TEE_SIGNAL_BUS_TEARDOWN))
+		return dispatch_signal_bus(self_id, &request, response,
+					   response_len);
 	if (request.servicegroup_id != RPMI_TEE_SERVICEGROUP_ID ||
 	    request.service_id != RPMI_TEE_CALL) {
 		put_unaligned_le32(response, RPMI_ERR_NOTSUPP);

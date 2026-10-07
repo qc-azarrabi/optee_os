@@ -30,6 +30,9 @@
 
 static struct optee_rpmi_context context = {
 	.core.peer_lock = SPINLOCK_UNLOCK,
+#ifdef CFG_CORE_ASYNC_NOTIF
+	.notif.lock = SPINLOCK_UNLOCK,
+#endif
 };
 
 struct optee_rpmi_context *optee_rpmi_get_context(void)
@@ -125,6 +128,7 @@ static void complete_current(struct rpmi_hart *hart)
 	uint32_t pending = 0;
 	TEE_Result res = TEE_SUCCESS;
 
+	optee_rpmi_flush_async_notif();
 	res = rpmi_reqfwd_complete(context.core.reqfwd_channel, hart->response,
 				   hart->response_len, &pending);
 	/* An uncertain completion cannot be retried without duplicating it. */
@@ -218,6 +222,7 @@ static TEE_Result optee_rpmi_probe_channels(struct mbox_chan *reqfwd,
 	uint32_t ep_id = 0;
 	uint32_t share = 0;
 	uint32_t multisegment = 0;
+	uint32_t signals = 0;
 	TEE_Result res = TEE_SUCCESS;
 
 	if (core->probed)
@@ -238,6 +243,12 @@ static TEE_Result optee_rpmi_probe_channels(struct mbox_chan *reqfwd,
 				      &multisegment);
 	if (res)
 		return res;
+	if (IS_ENABLED(CFG_CORE_ASYNC_NOTIF)) {
+		res = rpmi_tee_probe_features(tee, RPMI_TEE_FEATURE_SIGNAL_BUS,
+					      &signals);
+		if (res)
+			return res;
+	}
 
 	res = rpmi_shm_init(&context.shm, ep_id, multisegment,
 			    CFG_RPMI_TEE_ABI_MAX_PARCEL_PAGES);
@@ -248,6 +259,7 @@ static TEE_Result optee_rpmi_probe_channels(struct mbox_chan *reqfwd,
 		return res;
 	core->reqfwd_channel = reqfwd;
 	core->tee_channel = tee;
+	core->signal_bus_feature = signals;
 	core->probed = true;
 	return TEE_SUCCESS;
 }
@@ -297,9 +309,16 @@ DEFINE_DT_DRIVER(optee_rpmi_driver) = {
 static TEE_Result optee_rpmi_activate(void)
 {
 	struct optee_rpmi_core_state *core = &context.core;
+	uint32_t mode = core->signal_bus_feature & RPMI_TEE_SIGNAL_MODE_MASK;
 
 	if (!core->probed)
 		panic("OP-TEE RPMI backend was not probed");
+	if (IS_ENABLED(CFG_CORE_ASYNC_NOTIF)) {
+		if (mode != RPMI_TEE_SIGNAL_MODE_SYSTEM_MSI &&
+		    mode != RPMI_TEE_SIGNAL_MODE_SYSTEM_IRQ)
+			panic("RPMI signal buses are not supported");
+		notif_rpmi_init();
+	}
 	core->initialized = true;
 	return TEE_SUCCESS;
 }

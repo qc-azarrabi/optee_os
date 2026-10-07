@@ -7,6 +7,7 @@
 #define __KERNEL_OPTEE_RPMI_PRIVATE_H
 
 #include <drivers/mailbox.h>
+#include <kernel/notif.h>
 #include <mm/mobj.h>
 #include <optee_rpmi.h>
 #include <rpmi.h>
@@ -96,16 +97,37 @@ struct optee_rpmi_core_state {
 	struct mbox_chan *tee_channel;
 	bool probed;
 	bool initialized;
+	uint32_t signal_bus_feature;
 	/* Protects peer_id and peer_bound. */
 	unsigned int peer_lock;
 	uint32_t peer_id;
 	bool peer_bound;
 };
 
+/* Asynchronous notification state. */
+#ifdef CFG_CORE_ASYNC_NOTIF
+/* lock protects the bus, binding, pending doorbell and in-flight raises. */
+struct optee_rpmi_notif_state {
+	unsigned int lock;
+	uint32_t peer_id;
+	uint32_t signal_id;
+	unsigned int in_flight;
+	bool enabled;
+	bool pending;
+	unsigned int stopping;
+	bool stopped;
+	bool bus_active;
+	struct notif_driver driver;
+};
+#endif
+
 /* One domain-wide backend; each state group retains its own synchronization. */
 struct optee_rpmi_context {
 	struct optee_rpmi_core_state core;
 	struct rpmi_shm_context shm;
+#ifdef CFG_CORE_ASYNC_NOTIF
+	struct optee_rpmi_notif_state notif;
+#endif
 };
 
 /* Available during probing and activation, before runtime readiness checks. */
@@ -145,5 +167,31 @@ TEE_Result thread_rpmi_handle_control(uint32_t caller, uint32_t op,
 void thread_rpmi_suspend(uint32_t thread_id, uint32_t result) __noreturn;
 /* Reset the temporary stack before entering completion and retrieval again. */
 void thread_rpmi_return(void) __noreturn;
+
+/* Asynchronous notification operations and disabled-feature stubs. */
+#ifdef CFG_CORE_ASYNC_NOTIF
+void notif_rpmi_init(void);
+int32_t optee_rpmi_signal_bus_setup(void);
+void optee_rpmi_signal_bus_teardown(void);
+TEE_Result optee_rpmi_enable_async_notif(uint32_t peer, uint32_t signal);
+void optee_rpmi_flush_async_notif(void);
+#else
+static inline void notif_rpmi_init(void)
+{
+}
+
+static inline int32_t optee_rpmi_signal_bus_setup(void)
+{
+	return RPMI_ERR_DENIED;
+}
+
+static inline void optee_rpmi_signal_bus_teardown(void)
+{
+}
+
+static inline void optee_rpmi_flush_async_notif(void)
+{
+}
+#endif
 
 #endif /* __KERNEL_OPTEE_RPMI_PRIVATE_H */
