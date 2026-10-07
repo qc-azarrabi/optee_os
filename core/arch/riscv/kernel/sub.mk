@@ -10,6 +10,7 @@ srcs-$(CFG_RISCV_SBI_MPXY_RPMI) += sbi_mpxy_rpmi.c
 srcs-$(CFG_RISCV_SBI_MPXY_RPMI) += rpmi_reqfwd.c
 srcs-$(CFG_RISCV_SBI_MPXY_RPMI) += rpmi_tee.c
 srcs-$(CFG_RISCV_SBI_MPXY_RPMI) += optee_rpmi.c
+srcs-$(CFG_CORE_RPMI) += rpmi_shm.c
 srcs-y += boot.c
 srcs-y += hart.c
 srcs-y += entry.S
