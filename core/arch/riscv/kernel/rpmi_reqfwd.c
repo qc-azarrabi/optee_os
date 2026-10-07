@@ -25,6 +25,34 @@ struct rpmi_reqfwd_complete_resp {
 	uint32_t num_messages;
 };
 
+TEE_Result rpmi_reqfwd_parse_request(const void *data, size_t len,
+				     struct rpmi_reqfwd_request *request)
+{
+	const struct rpmi_message *msg = data;
+	uint16_t datalen = 0;
+
+	if (!data || !request)
+		return TEE_ERROR_BAD_PARAMETERS;
+	*request = (struct rpmi_reqfwd_request){};
+	if (len < sizeof(msg->header))
+		return TEE_ERROR_BAD_FORMAT;
+
+	datalen = get_unaligned_le16(&msg->header.datalen);
+	/* Bit 3 belongs to the transport; the remaining flags describe type. */
+	if ((msg->header.flags & ~BIT(3)) != RPMI_MSG_NORMAL_REQUEST ||
+	    datalen % sizeof(uint32_t) ||
+	    datalen != len - sizeof(msg->header))
+		return TEE_ERROR_BAD_FORMAT;
+
+	request->servicegroup_id =
+		get_unaligned_le16(&msg->header.servicegroup_id);
+	request->service_id = msg->header.service_id;
+	request->token = get_unaligned_le16(&msg->header.token);
+	request->data = msg->data;
+	request->len = datalen;
+	return TEE_SUCCESS;
+}
+
 static TEE_Result reqfwd_send(struct sbi_mpxy_rpmi_channel *channel,
 			      uint32_t service_id, void *req, size_t req_len,
 			      void *resp, unsigned long *resp_len)

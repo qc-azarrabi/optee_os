@@ -15,8 +15,22 @@
 #define RPMI_REQFWD_RETRIEVE_CURRENT_MESSAGE	0x02
 #define RPMI_REQFWD_COMPLETE_CURRENT_MESSAGE	0x03
 
+/* Decoded view of a forwarded normal request; data borrows the input buffer. */
+struct rpmi_reqfwd_request {
+	uint16_t servicegroup_id;
+	uint8_t service_id;
+	uint16_t token;
+	const void *data;
+	size_t len;
+};
+
+/* Validate and consume the embedded RPMI header after complete retrieval. */
+TEE_Result rpmi_reqfwd_parse_request(const void *data, size_t len,
+				     struct rpmi_reqfwd_request *request);
+
 /*
  * Retrieve a complete forwarded request into caller-owned storage.
+ * The agreed TEE contract includes the standard eight-byte RPMI header.
  *
  * The caller exclusively owns this queue from retrieval through completion;
  * no other consumer may retrieve or complete its current message. Select the
@@ -36,6 +50,7 @@ TEE_Result rpmi_reqfwd_retrieve(struct sbi_mpxy_rpmi_channel *channel,
 
 /*
  * Complete the queue's current request with exactly len response-data bytes.
+ * Do not include a generic RPMI header: firmware matches the queued request.
  * The caller must have retrieved that request successfully and must not submit
  * a second completion. TEE_SUCCESS reports a valid RPMI response; *status is
  * its service result. *num_messages is valid only for RPMI_SUCCESS. Completion
