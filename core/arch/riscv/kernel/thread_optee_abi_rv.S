@@ -40,6 +40,16 @@ FUNC thread_return_to_udomain , :
 	panic_at_abi_return
 END_FUNC thread_return_to_udomain
 
+#ifdef CFG_CORE_RPMI
+FUNC thread_rpmi_return , :
+	/* Discard abandoned retrieval frames after a thread switches. */
+	csrw	CSR_XIE, x0
+	jal	thread_get_tmp_sp
+	mv	sp, a0
+	j	optee_rpmi_complete_and_loop
+END_FUNC thread_rpmi_return
+#endif
+
 FUNC thread_std_abi_entry , :
 	jal	__thread_std_abi_entry
 
@@ -59,6 +69,16 @@ FUNC thread_std_abi_entry , :
 	 */
 	jal	thread_state_free
 
+#ifdef CFG_CORE_RPMI
+	mv	a0, s0
+	li	a1, 0	/* DONE */
+	li	a2, 0
+#ifdef RV32
+	li	a3, 0	/* high half of the zero token */
+#endif
+	call	optee_rpmi_set_call_response
+	j	thread_rpmi_return
+#else
 	/* Restore __thread_std_abi_entry() return value */
 	mv	a1, s0
 	li	a2, 0
@@ -69,6 +89,7 @@ FUNC thread_std_abi_entry , :
 
 	/* Return to untrusted domain */
 	jal	thread_return_to_udomain
+#endif
 END_FUNC thread_std_abi_entry
 
 /*
@@ -123,6 +144,10 @@ FUNC thread_rpc_xstatus , :
 	la	a2, .thread_rpc_return
 	jal	thread_state_suspend
 
+#ifdef CFG_CORE_RPMI
+	li	a1, 1	/* RPC_CMD */
+	j	thread_rpmi_suspend
+#else
 	mv	a4, a0	/* thread index */
 	mv	a1, s2	/* rv[0] */
 	mv	a2, s3	/* rv[1] */
@@ -132,6 +157,7 @@ FUNC thread_rpc_xstatus , :
 
 	/* Return to untrusted domain */
 	jal	thread_return_to_udomain
+#endif
 .thread_rpc_return:
 	/*
 	 * Jumps here from thread_resume() above when RPC has returned.
@@ -160,6 +186,7 @@ FUNC thread_rpc_xstatus , :
 END_FUNC thread_rpc_xstatus
 DECLARE_KEEP_PAGER thread_rpc_xstatus
 
+#ifndef CFG_CORE_RPMI
 LOCAL_FUNC vector_std_abi_entry, : , .identity_map
 	jal	thread_handle_std_abi
 	/*
@@ -230,3 +257,4 @@ FUNC thread_vector_table , : , .identity_map, , nobti
 	.option pop
 END_FUNC thread_vector_table
 DECLARE_KEEP_PAGER thread_vector_table
+#endif

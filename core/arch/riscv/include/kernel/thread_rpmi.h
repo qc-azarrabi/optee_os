@@ -8,6 +8,7 @@
 
 #include <rpmi_reqfwd.h>
 #include <kernel/rpmi_shm.h>
+#include <optee_rpmi.h>
 
 /*
  * Dispatch a decoded request and construct its complete service response data.
@@ -25,6 +26,18 @@ struct sbi_mpxy_rpmi_channel *optee_rpmi_channel(void);
 struct rpmi_shm_context *optee_rpmi_shm_context(void);
 uint32_t optee_rpmi_caller(void);
 void optee_rpmi_set_caller(uint32_t caller);
+/* The initial backend serves one authenticated REE until secure OS restart. */
+bool optee_rpmi_claim_caller(uint32_t caller);
+void optee_rpmi_set_call_response(int32_t status, uint32_t result,
+				  uint64_t token);
+void optee_rpmi_complete_and_loop(void) __noreturn;
+
+TEE_Result thread_rpmi_handle_control(const void *data, size_t len,
+				      void *response, size_t *response_len);
+/* Called after the architecture has saved and suspended a secure thread. */
+void thread_rpmi_suspend(uint32_t thread_id, uint32_t result) __noreturn;
+/* Reset the temporary stack before entering completion and retrieval again. */
+void thread_rpmi_return(void) __noreturn;
 
 /* Platform overrides may replace the provisional DT channel association. */
 TEE_Result optee_rpmi_get_channel_ids(uint32_t hart_id, uint32_t *reqfwd_id,

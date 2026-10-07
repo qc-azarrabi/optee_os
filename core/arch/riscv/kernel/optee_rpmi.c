@@ -76,6 +76,10 @@ static TEE_Result dispatch_control(const void *data, size_t len,
 				   NOTIF_VALUE_MAX + 1);
 		break;
 #ifdef CFG_CORE_RPMI
+	case OPTEE_RPMI_YIELDING_CALL_WITH_ARG:
+	case OPTEE_RPMI_YIELDING_CALL_RESUME:
+		return thread_rpmi_handle_control(data, len, response,
+						  response_len);
 	case OPTEE_RPMI_UNREGISTER_SHM: {
 		const struct optee_rpmi_unregister_req *req = data;
 		TEE_Result res = TEE_SUCCESS;

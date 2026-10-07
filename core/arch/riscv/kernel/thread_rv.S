@@ -800,6 +800,10 @@ FUNC thread_foreign_interrupt_handler , :
 	sw	s1, THREAD_CORE_LOCAL_FLAGS(tp)
 
 	/* Passing thread index in a0, and return to untrusted domain. */
+#ifdef CFG_CORE_RPMI
+	li	a1, 2	/* INTERRUPT */
+	j	thread_rpmi_suspend
+#else
 	mv	a4, a0
 	li	a0, TEEABI_OPTEED_RETURN_CALL_DONE
 	li	a1, OPTEE_ABI_RETURN_RPC_FOREIGN_INTR
@@ -807,4 +811,5 @@ FUNC thread_foreign_interrupt_handler , :
 	li	a3, 0
 	li	a5, 0
 	j	thread_return_to_udomain
+#endif
 END_FUNC thread_foreign_interrupt_handler
