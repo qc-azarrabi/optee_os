@@ -9,10 +9,12 @@
 #include <kernel/dt_driver.h>
 #include <kernel/misc.h>
 #include <kernel/panic.h>
+#include <kernel/spinlock.h>
 #include <kernel/thread.h>
 #include <rpmi_reqfwd.h>
 #include <rpmi_tee.h>
 #include <stdlib.h>
+#include <utee_defines.h>
 
 #include "optee_rpmi_private.h"
 
@@ -26,7 +28,14 @@
 
 /* 1. Backend state and caller tracking. */
 
-static struct optee_rpmi_context context;
+static struct optee_rpmi_context context = {
+	.core.peer_lock = SPINLOCK_UNLOCK,
+};
+
+struct optee_rpmi_context *optee_rpmi_get_context(void)
+{
+	return &context;
+}
 
 /* Each hart owns its request context and buffers through completion. */
 static struct rpmi_hart *current_hart(void)
@@ -55,6 +64,32 @@ TEE_Result mobj_rpmi_get_by_cookie(uint64_t global_id, struct mobj **mobj)
 			    thread_get_tsd()->rpmi_caller_id, global_id, mobj);
 }
 
+bool optee_rpmi_claim_caller(uint32_t caller)
+{
+	struct optee_rpmi_core_state *core = &context.core;
+	uint32_t exceptions = cpu_spin_lock_xsave(&core->peer_lock);
+	bool accepted = false;
+
+	if (!core->peer_bound) {
+		core->peer_id = caller;
+		core->peer_bound = true;
+	}
+	accepted = core->peer_id == caller;
+	cpu_spin_unlock_xrestore(&core->peer_lock, exceptions);
+	return accepted;
+}
+
+/* A resume must come from the already bound peer, without claiming one. */
+bool optee_rpmi_check_caller(uint32_t caller)
+{
+	struct optee_rpmi_core_state *core = &context.core;
+	uint32_t exceptions = cpu_spin_lock_xsave(&core->peer_lock);
+	bool accepted = core->peer_bound && core->peer_id == caller;
+
+	cpu_spin_unlock_xrestore(&core->peer_lock, exceptions);
+	return accepted;
+}
+
 /* 2. Forwarded-request processing. */
 
 static TEE_Result init_hart_buffer(struct rpmi_hart *hart)
@@ -64,6 +99,25 @@ static TEE_Result init_hart_buffer(struct rpmi_hart *hart)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
 	return TEE_SUCCESS;
+}
+
+void optee_rpmi_set_call_response(TEE_Result status, uint32_t result,
+				  uint32_t token)
+{
+	struct rpmi_hart *hart = current_hart();
+	struct optee_rpmi_call_resp call = {
+		.status = TEE_U32_TO_LITTLE_ENDIAN(status),
+		.result = TEE_U32_TO_LITTLE_ENDIAN(result),
+		.resume_token = TEE_U32_TO_LITTLE_ENDIAN(token),
+	};
+	TEE_Result res = TEE_SUCCESS;
+
+	hart->response_len = sizeof(hart->response);
+	res = rpmi_tee_call_set_response(RPMI_SUCCESS, &call, sizeof(call),
+					 hart->response,
+					 &hart->response_len);
+	if (res)
+		panic("Cannot encode yielding-call response");
 }
 
 static void complete_current(struct rpmi_hart *hart)
@@ -76,6 +130,12 @@ static void complete_current(struct rpmi_hart *hart)
 	/* An uncertain completion cannot be retried without duplicating it. */
 	if (res)
 		panic("Forwarded request completion failed");
+}
+
+void optee_rpmi_complete_and_loop(void)
+{
+	complete_current(current_hart());
+	optee_rpmi_loop();
 }
 
 /*

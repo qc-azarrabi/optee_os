@@ -50,6 +50,105 @@ struct rpmi_shm_entry {
 	bool slot_held;
 };
 
+/* A logical SHM view keeps the cached whole-parcel mapping alive. */
+struct rpmi_shm_view {
+	struct mobj mobj;
+	struct mobj *parent;
+	size_t offset;
+};
+
+static struct rpmi_shm_view *to_view(struct mobj *mobj)
+{
+	return container_of(mobj, struct rpmi_shm_view, mobj);
+}
+
+static void *view_get_va(struct mobj *mobj, size_t offset, size_t len)
+{
+	struct rpmi_shm_view *view = to_view(mobj);
+
+	if (!mobj_check_offset_and_len(mobj, offset, len))
+		return NULL;
+	return mobj_get_va(view->parent, view->offset + offset, len);
+}
+
+static TEE_Result view_get_pa(struct mobj *mobj, size_t offset,
+			      size_t granule, paddr_t *pa)
+{
+	struct rpmi_shm_view *view = to_view(mobj);
+
+	if (offset >= mobj->size)
+		return TEE_ERROR_BAD_PARAMETERS;
+	return mobj_get_pa(view->parent, view->offset + offset, granule, pa);
+}
+
+static size_t view_get_phys_offs(struct mobj *mobj, size_t granule)
+{
+	struct rpmi_shm_view *view = to_view(mobj);
+
+	assert(granule && IS_POWER_OF_TWO(granule));
+	return (mobj_get_phys_offs(view->parent, granule) + view->offset) &
+	       (granule - 1);
+}
+
+static TEE_Result view_get_mem_type(struct mobj *mobj, uint32_t *type)
+{
+	return mobj_get_mem_type(to_view(mobj)->parent, type);
+}
+
+static bool view_matches(struct mobj *mobj, enum buf_is_attr attr)
+{
+	return mobj_matches(to_view(mobj)->parent, attr);
+}
+
+static uint64_t view_get_cookie(struct mobj *mobj)
+{
+	return mobj_get_cookie(to_view(mobj)->parent);
+}
+
+static void view_free(struct mobj *mobj)
+{
+	struct rpmi_shm_view *view = to_view(mobj);
+
+	mobj_put(view->parent);
+	free(view);
+}
+
+static const struct mobj_ops view_ops = {
+	.get_va = view_get_va,
+	.get_pa = view_get_pa,
+	.get_phys_offs = view_get_phys_offs,
+	.get_mem_type = view_get_mem_type,
+	.matches = view_matches,
+	.get_cookie = view_get_cookie,
+	.free = view_free,
+};
+
+size_t rpmi_shm_view_offset(struct mobj *mobj)
+{
+	return mobj->ops == &view_ops ? to_view(mobj)->offset : 0;
+}
+
+struct mobj *rpmi_shm_view_alloc(struct mobj *parent, size_t offset,
+				 size_t size)
+{
+	struct rpmi_shm_view *view = NULL;
+
+	if (offset > parent->size || size > parent->size - offset)
+		return NULL;
+	if (!offset && size == parent->size)
+		return parent;
+	view = calloc(1, sizeof(*view));
+	if (!view)
+		return NULL;
+	view->mobj.ops = &view_ops;
+	view->mobj.size = size;
+	view->mobj.phys_granule = parent->phys_granule;
+	refcount_set(&view->mobj.refc, 1);
+	view->parent = parent;
+	view->offset = offset;
+	return &view->mobj;
+}
+
 TEE_Result rpmi_shm_init(struct rpmi_shm_context *ctx, uint32_t self_id,
 			 uint32_t multisegment_max, size_t max_pages)
 {

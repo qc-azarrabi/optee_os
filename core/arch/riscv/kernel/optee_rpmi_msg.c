@@ -114,6 +114,10 @@ static TEE_Result dispatch_control(uint32_t caller, const void *data,
 		resp->caps.max_notification_key =
 			TEE_U32_TO_LITTLE_ENDIAN(NOTIF_VALUE_MAX);
 		break;
+	case OPTEE_RPMI_YIELDING_CALL_WITH_ARG:
+	case OPTEE_RPMI_YIELDING_CALL_RESUME:
+		return thread_rpmi_handle_control(caller, op, data, len,
+						  &resp->call, response_len);
 	case OPTEE_RPMI_UNREGISTER_SHM:
 		if (*response_len < size)
 			return TEE_ERROR_SHORT_BUFFER;
