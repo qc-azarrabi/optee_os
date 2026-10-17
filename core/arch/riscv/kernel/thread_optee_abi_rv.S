@@ -82,8 +82,8 @@ FUNC thread_rpc_xstatus , :
 	/* Read xSTATUS */
 	csrr	a2, CSR_XSTATUS
 
-	/* Mask all maskable exceptions before switching to temporary stack */
-	csrw	CSR_XIE, x0
+	/* Save and mask interrupt sources before switching stacks. */
+	csrrw	a3, CSR_XIE, x0
 
 	/* Save return address xSTATUS and pointer to rv */
 	STR	a0, REGOFF(0)(sp)
@@ -91,6 +91,7 @@ FUNC thread_rpc_xstatus , :
 	STR	s0, REGOFF(2)(sp)
 	STR	ra, REGOFF(3)(sp)
 	STR	a2, REGOFF(4)(sp)
+	STR	a3, REGOFF(5)(sp)
 #ifdef CFG_UNWIND
 	addi	s0, sp, REGOFF(8)
 #endif
@@ -98,6 +99,9 @@ FUNC thread_rpc_xstatus , :
 	/* Save thread state */
 	jal	thread_get_ctx_regs
 	LDR	ra, REGOFF(3)(sp)
+	/* Preserve the interrupt-enable state restored by thread_resume(). */
+	LDR	a3, REGOFF(5)(sp)
+	STR	a3, THREAD_CTX_REG_IE(a0)
 	/* Save ra, sp, gp, tp, and s0~s11 */
 	store_xregs a0, THREAD_CTX_REG_RA, REG_RA, REG_TP
 	store_xregs a0, THREAD_CTX_REG_S0, REG_S0, REG_S1
